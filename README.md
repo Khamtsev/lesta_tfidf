@@ -6,6 +6,7 @@
 1. Клонируйте репозиторий:
 ```bash
 git clone https://github.com/Khamtsev/lesta_tfidf
+cd lesta_tfidf
 ```
 
 2. Создайте и активируйте виртуальное окружение:
