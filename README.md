@@ -1,35 +1,68 @@
-# Веб-приложение для рассчета TFIDF текстовых файлов
-# Реализовано на Python 3.12.9 и Django 5.2
+# Веб-приложение для расчета TFIDF текстовых файлов
+
+Веб-приложение для анализа текстовых файлов с использованием метрик TF (Term Frequency), IDF (Inverse Document Frequency) и TFIDF (Term Frequency-Inverse Document Frequency).
+
+## Технологии
+
+- Python 3.12.9
+- Django 5.2
+- PostgreSQL
+- Docker & Docker Compose
 
 ## Локальное развертывание
+
+### Требования
+
+- Docker
+- Docker Compose
+- Git
+
+### Установка и запуск
 
 1. Клонируйте репозиторий:
 ```bash
 git clone https://github.com/Khamtsev/lesta_tfidf
+cd lesta_tfidf
 ```
 
-2. Создайте и активируйте виртуальное окружение:
+2. Создайте и заполните файл .env на основе .env.example:
 ```bash
-python -m venv venv
-source venv\Scripts\activate
+cp .env.example .env
 ```
 
-3. Установите зависимости:
+3. Запустите проект с помощью Docker Compose:
 ```bash
-pip install -r requirements.txt
-```
-
-4. Примините миграции
-```bash
-python manage.py migrate
-```
-
-5. Запустите приложение
-```bash
-python manage.py runserver
+docker compose up --build
 ```
 
 Приложение будет доступно по адресу:
-<http://127.0.0.1:8000/>
+http://localhost
 
-Загрузите текстовый файл для подсчета TF, IDF, TFIDF. Для IDF и TFIDF учитываются все загруженные файлы.
+## Использование
+
+1. Загрузите текстовый файл для подсчета TF, IDF, TFIDF
+2. Для расчета IDF и TFIDF учитываются все загруженные файлы
+3. Результаты анализа будут отображены в веб-интерфейсе
+
+## Структура проекта
+
+```
+lesta_tfidf/
+├── core/           # Основное приложение
+├── tfidf/          # Конфигурация проекта Django
+├── docker-compose.yml
+├── Dockerfile
+└── requirements.txt
+```
+
+## Переменные окружения
+
+Основные переменные окружения (определяются в .env):
+- `DEBUG` - режим отладки Django (1 - включен, 0 - выключен)
+- `SECRET_KEY` - секретный ключ Django для безопасности
+- `ALLOWED_HOSTS` - список разрешенных хостов для Django
+- `POSTGRES_DB` - имя базы данных PostgreSQL
+- `POSTGRES_USER` - пользователь базы данных PostgreSQL
+- `POSTGRES_PASSWORD` - пароль базы данных PostgreSQL
+- `DB_HOST` - хост базы данных (в Docker Compose это имя сервиса)
+- `DB_PORT` - порт базы данных PostgreSQL (по умолчанию 5432)
