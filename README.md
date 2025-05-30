@@ -1,4 +1,4 @@
-# Веб-приложение для расчета TFIDF текстовых файлов
+# Веб-приложение для расчета TFIDF текстовых файлов - v0.1.0
 
 Веб-приложение для анализа текстовых файлов с использованием метрик TF (Term Frequency), IDF (Inverse Document Frequency) и TFIDF (Term Frequency-Inverse Document Frequency).
 
