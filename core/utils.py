@@ -1,9 +1,11 @@
 from collections import Counter
-from .models import DocumentCount, Word
+from .decorators import timeit_decorator
+from .models import DocumentCount, Metrics, Word
 import re
 import math
 
 
+@timeit_decorator
 def calculate_tf_idf(doc):
     text = doc.file.read().decode('utf-8')
     clean_text = re.sub(r'[^\w\s]', '', text.lower())
@@ -15,9 +17,9 @@ def calculate_tf_idf(doc):
     tf = {word: count / total_words for word, count in word_counter.items()}
 
     idf = {}
-    document_count, created = DocumentCount.objects.get_or_create(pk=1)
-    document_count.count += 1
-    document_count.save()
+    metrics, created = Metrics.objects.get_or_create(pk=1)
+    metrics.files_processed += 1
+    metrics.save()
 
     results = []
 
@@ -26,7 +28,7 @@ def calculate_tf_idf(doc):
         word_obj.in_docs += 1
         word_obj.save()
 
-        idf[word] = math.log(document_count.count / word_obj.in_docs)
+        idf[word] = math.log(metrics.files_processed / word_obj.in_docs)
         results.append((word, tf[word], idf[word], tf[word]*idf[word]))
 
     return results
