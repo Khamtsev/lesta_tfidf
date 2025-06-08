@@ -1,4 +1,4 @@
-# Веб-приложение для расчета TFIDF текстовых файлов - v0.2.0
+# Веб-приложение для расчета TFIDF текстовых файлов - v0.3.0
 
 Веб-приложение для анализа текстовых файлов с использованием метрик TF (Term Frequency), IDF (Inverse Document Frequency) и TFIDF (Term Frequency-Inverse Document Frequency).
 
@@ -48,6 +48,21 @@ http://localhost
 
 Приложение предоставляет следующие API эндпоинты:
 
+#### Документы
+- `GET /api/documents/` - получение списка документов (id и название)
+- `GET /api/documents/<document_id>/` - получение содержимого документа
+- `POST /api/documents/` - загрузка нового документа
+- `DELETE /api/documents/<document_id>/` - удаление документа
+
+#### Коллекции
+- `GET /api/collections/` - получение списка коллекций с id и списком документов
+- `GET /api/collections/<collection_id>/` - получение списка id документов в коллекции
+- `POST /api/collections/` - создание новой коллекции
+- `DELETE /api/collections/<collection_id>/` - удаление коллекции
+- `POST /api/collections/<collection_id>/<document_id>/` - добавление документа в коллекцию
+- `DELETE /api/collections/<collection_id>/<document_id>/` - удаление документа из коллекции
+
+#### Системные
 - `GET /api/status/` - проверка статуса приложения
 - `GET /api/version/` - получение текущей версии приложения
 - `GET /api/metrics/` - получение метрик обработки файлов в формате JSON:
@@ -62,8 +77,9 @@ http://localhost
 
 ```
 lesta_tfidf/
-├── core/           # API приложение
+├── api/            # API приложение
 ├── core/           # Основное приложение
+├── users/          # Приложение для работы с пользователями
 ├── tfidf/          # Конфигурация проекта Django
 ├── docker-compose.yml
 ├── Dockerfile

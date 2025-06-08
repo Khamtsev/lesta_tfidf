@@ -7,6 +7,7 @@ import math
 
 @timeit_decorator
 def calculate_tf_idf(doc):
+    file_size = doc.file.size
     text = doc.file.read().decode('utf-8')
     clean_text = re.sub(r'[^\w\s]', '', text.lower())
     words = clean_text.split()
@@ -19,6 +20,7 @@ def calculate_tf_idf(doc):
     idf = {}
     metrics, created = Metrics.objects.get_or_create(pk=1)
     metrics.files_processed += 1
+    metrics.files_size += file_size
     metrics.save()
 
     results = []
