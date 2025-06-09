@@ -1,6 +1,6 @@
 # Веб-приложение для расчета TFIDF текстовых файлов - v0.3.0
 
-Веб-приложение для анализа текстовых файлов с использованием метрик TF (Term Frequency), IDF (Inverse Document Frequency) и TFIDF (Term Frequency-Inverse Document Frequency).
+Веб-приложение для анализа текстовых файлов с использованием метрик TF (Term Frequency) и IDF (Inverse Document Frequency).
 
 ## Технологии
 
@@ -35,55 +35,169 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Приложение будет доступно по адресу:
-http://localhost
-
 ## Использование
 
-1. Загрузите текстовый файл для подсчета TF, IDF, TFIDF
-2. Для расчета IDF и TFIDF учитываются все загруженные файлы
-3. Результаты анализа будут отображены в веб-интерфейсе
+### Регистрация 
+
+1. Создайте нового пользователя:
+```
+POST http://localhost/api/v1/auth/users/`
+Content-Type: application/json
+
+{
+    "username": "your_username",
+    "password": "your_password",
+}
+```
+
+2. Получите JWT токен:
+```
+POST `POST /api/v1/auth/jwt/create/`
+Content-Type: application/json
+
+{
+    "username": "your_username",
+    "password": "your_password"
+}
+```
+
+Ответ будет содержать access и refresh токены:
+```json
+{
+    "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+    "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+}
+```
+
+3. Используйте токен для запросов:
+```
+GET http://localhost/api/v1/documents/
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+```
+
+### Пример использования
+
+1. Создание коллекции:
+```
+POST http://localhost/api/v1/collections/
+Authorization: Bearer <your_access_token>
+Content-Type: application/json
+
+{
+    "name": "My Collection",
+    "description": "Collection for testing"
+}
+```
+
+2. Загрузка документа:
+```
+POST http://localhost/api/v1/documents/
+Authorization: Bearer <your_access_token>
+Content-Type: multipart/form-data
+
+file: <your_text_file.txt>
+```
+
+3. Добавление документа в коллекцию:
+```
+POST http://localhost/api/v1/collections/1/1/
+Authorization: Bearer <your_access_token>
+```
+
+4. Получение статистики по документу:
+```
+GET http://localhost/api/v1/documents/1/statistics/
+Authorization: Bearer <your_access_token>
+```
+
+Пример ответа:
+```json
+[
+    {
+        "collection_id": 1,
+        "collection_name": "My Collection",
+        "statistics": [
+            {
+                "word": "example",
+                "tf": 0.05,
+                "idf": 2.3
+            },
+            {
+                "word": "test",
+                "tf": 0.03,
+                "idf": 1.8
+            }
+            // ... еще 48 слов
+        ]
+    }
+]
+```
 
 ### API Endpoints
 
 Приложение предоставляет следующие API эндпоинты:
 
-#### Документы
-- `GET /api/documents/` - получение списка документов (id и название)
-- `GET /api/documents/<document_id>/` - получение содержимого документа
-- `POST /api/documents/` - загрузка нового документа
-- `DELETE /api/documents/<document_id>/` - удаление документа
+#### Пользователи
 
-#### Коллекции
-- `GET /api/collections/` - получение списка коллекций с id и списком документов
-- `GET /api/collections/<collection_id>/` - получение списка id документов в коллекции
-- `POST /api/collections/` - создание новой коллекции
-- `DELETE /api/collections/<collection_id>/` - удаление коллекции
-- `POST /api/collections/<collection_id>/<document_id>/` - добавление документа в коллекцию
-- `DELETE /api/collections/<collection_id>/<document_id>/` - удаление документа из коллекции
+- `POST /api/v1/auth/users/` - регистрация нового пользователя
+- `GET /api/v1/auth/users/me/` - получение информации о текущем пользователе
+- `PATCH /api/v1/auth/users/me/` - частичное обновление данных пользователя
+- `PUT /api/v1/auth/users/me/` - полное обновление данных пользователя
+- `DELETE /api/v1/auth/users/me/` - удаление текущего пользователя
+- `POST /api/v1/auth/users/set_password/` - изменение пароля
+- `POST /api/v1/auth/jwt/create/` - получение JWT токена
+- `POST /api/v1/auth/jwt/refresh/` - обновление JWT токена
+- `POST /api/v1/auth/jwt/verify/` - проверка JWT токена
 
-#### Системные
-- `GET /api/status/` - проверка статуса приложения
-- `GET /api/version/` - получение текущей версии приложения
-- `GET /api/metrics/` - получение метрик обработки файлов в формате JSON:
-  - `files_processed` - количество обработанных файлов
-  - `min_time_processed` - минимальное время обработки файла
-  - `avg_time_processed` - среднее время обработки файла
-  - `max_time_processed` - максимальное время обработки файла
-  - `latest_file_processed_timestamp` - время последней обработки файла
-  - `avg_file_size` - средний размер файла. Вместе с `avg_time_processed` может быть полезно для представления о времени обработки файлов.
+#### Документы [требуется аутентификация, доступ только к своим документам]
+- `GET /api/v1/documents/` - получение списка документов (id и название)
+- `GET /api/v1/documents/<document_id>/` - получение содержимого документа
+- `POST /api/v1/documents/` - загрузка нового документа
+- `DELETE /api/v1/documents/<document_id>/` - удаление документа
+- `GET /api/v1/documents/<document_id>/statistics/` - получение статистики по документу (50 наиболее редких слов с их TF и IDF)
+
+#### Коллекции [требуется аутентификация, доступ только к своим коллекциям]
+- `GET /api/v1/collections/` - получение списка коллекций с id и списком документов
+- `GET /api/v1/collections/<collection_id>/` - получение списка id документов в коллекции
+- `POST /api/v1/collections/` - создание новой коллекции
+- `DELETE /api/v1/collections/<collection_id>/` - удаление коллекции
+- `POST /api/v1/collections/<collection_id>/<document_id>/` - добавление документа в коллекцию
+- `DELETE /api/v1/collections/<collection_id>/<document_id>/` - удаление документа из коллекции
+- `GET /api/v1/collections/<collection_id>/statistics/` - получение статистики по коллекции (50 наиболее редких слов с их TF и IDF)
+
+#### Системные [публичный доступ]
+- `GET /api/v1/status/` - проверка статуса приложения
+- `GET /api/v1/version/` - получение текущей версии приложения
+- `GET /api/v1/metrics/` - получение метрик обработки файлов в формате JSON:
+  - `document_metrics` - метрики обработки документов:
+    - `statistics_requests` - количество запросов статистики
+    - `latest_statistics_processed_timestamp` - время последней обработки
+    - `min_time_processed` - минимальное время обработки
+    - `avg_time_processed` - среднее время обработки
+    - `max_time_processed` - максимальное время обработки
+    - `total_documents` - общее количество документов
+  - `collection_metrics` - метрики обработки коллекций:
+    - `statistics_requests` - количество запросов статистики
+    - `latest_statistics_processed_timestamp` - время последней обработки
+    - `min_time_processed` - минимальное время обработки
+    - `avg_time_processed` - среднее время обработки
+    - `max_time_processed` - максимальное время обработки
+    - `avg_documents_per_collection` - среднее количество документов в коллекции
 
 ## Структура проекта
 
 ```
 lesta_tfidf/
-├── api/            # API приложение
-├── core/           # Основное приложение
-├── users/          # Приложение для работы с пользователями
-├── tfidf/          # Конфигурация проекта Django
-├── docker-compose.yml
-├── Dockerfile
-└── requirements.txt
+├── api/                  # API приложение
+├── core/                 # Основное приложение
+├── users/                # Приложение для работы с пользователями
+├── tfidf/                # Конфигурация проекта Django
+├── docker-compose.yml    # Конфигурация Docker Compose
+├── Dockerfile            # Инструкции для сборки Docker образа
+├── requirements.txt      # Зависимости Python
+├── .env.example          # Пример файла с переменными окружения
+├── README.md             # Документация проекта
+└── CHANGELOG.md          # История изменений проекта
 ```
 
 ## Переменные окружения

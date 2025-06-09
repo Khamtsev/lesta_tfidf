@@ -13,4 +13,6 @@ urlpatterns = [
     path('metrics/', views.metrics, name='metrics'),
     path('version/', views.version, name='version'),
     path('', include(router.urls)),
+    path('auth/', include('djoser.urls')),
+    path('auth/', include('djoser.urls.jwt')),
 ]

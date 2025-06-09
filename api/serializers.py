@@ -2,6 +2,22 @@ from rest_framework import serializers
 from core.models import Collections, Document
 
 
+class WordStatisticsSerializer(serializers.Serializer):
+    word = serializers.CharField()
+    tf = serializers.FloatField()
+    idf = serializers.FloatField()
+
+
+class StatisticsSerializer(serializers.Serializer):
+    statistics = WordStatisticsSerializer(many=True)
+
+
+class CollectionStatisticsSerializer(serializers.Serializer):
+    collection_id = serializers.IntegerField()
+    collection_name = serializers.CharField()
+    statistics = WordStatisticsSerializer(many=True)
+
+
 class CollectionsCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Collections

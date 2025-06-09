@@ -1,56 +1,82 @@
-from rest_framework.decorators import api_view, action
+from rest_framework.decorators import api_view, action, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.parsers import MultiPartParser, FormParser
-from core.models import Metrics, Collections, Document
-from core.constants import VERSION
+from rest_framework.permissions import AllowAny
+from core.models import (
+    Collections,
+    Document,
+    DocumentMetrics,
+    CollectionMetrics
+)
+from core.constants import VERSION, DISPLAYED_WORDS
+from core.services import get_document_statistics, get_collection_statistics
 from .serializers import (
     CollectionsCreateSerializer,
     CollectionsSerializer,
     DocumentListSerializer,
     DocumentDetailSerializer,
-    DocumentCreateSerializer
+    DocumentCreateSerializer,
+    StatisticsSerializer,
+    CollectionStatisticsSerializer
 )
 from users.permissions import IsOwner
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def check_status(request):
+    """Проверяет статус сервера."""
     return Response({"status": "OK"})
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def metrics(request):
-    metrics = Metrics.objects.first()
-    if not metrics:
-        return Response({
-            "files_processed": 0,
-            "min_time_processed": 0.0,
-            "avg_time_processed": 0.0,
-            "max_time_processed": 0.0,
-            "latest_file_processed_timestamp": None,
-            "avg_file_size": 0.0
-        })
+    """Возвращает метрики системы."""
+    doc_metrics, _ = DocumentMetrics.objects.get_or_create(pk=1)
+    coll_metrics, _ = CollectionMetrics.objects.get_or_create(pk=1)
+
+    total_documents = Document.objects.count()
+    total_collections = Collections.objects.count()
+    avg_docs_per_collection = (
+        total_documents / total_collections if total_collections > 0 else 0
+    )
 
     return Response({
-        "files_processed": metrics.files_processed,
-        "min_time_processed": metrics.min_time_processed,
-        "avg_time_processed": metrics.avg_time_processed,
-        "max_time_processed": metrics.max_time_processed,
-        "latest_file_processed_timestamp": (
-            metrics.latest_file_processed_timestamp
-        ),
-        "avg_file_size": metrics.avg_file_size
+        "document_metrics": {
+            "statistics_requests": doc_metrics.statistics_requests,
+            "latest_statistics_processed_timestamp": (
+                doc_metrics.latest_statistics_processed_timestamp
+            ),
+            "min_time_processed": doc_metrics.min_time_processed,
+            "avg_time_processed": doc_metrics.avg_time_processed,
+            "max_time_processed": doc_metrics.max_time_processed,
+            "total_documents": total_documents
+        },
+        "collection_metrics": {
+            "statistics_requests": coll_metrics.statistics_requests,
+            "latest_statistics_processed_timestamp": (
+                coll_metrics.latest_statistics_processed_timestamp
+            ),
+            "min_time_processed": coll_metrics.min_time_processed,
+            "avg_time_processed": coll_metrics.avg_time_processed,
+            "max_time_processed": coll_metrics.max_time_processed,
+            "avg_documents_per_collection": avg_docs_per_collection
+        }
     })
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def version(request):
+    """Возвращает версию приложения."""
     return Response({"version": VERSION})
 
 
 class CollectionsViewSet(ModelViewSet):
+    """Представление для коллекций документов."""
     queryset = Collections.objects.all()
     permission_classes = (IsOwner,)
     http_method_names = ('get', 'post', 'delete')
@@ -68,6 +94,7 @@ class CollectionsViewSet(ModelViewSet):
 
     @action(detail=True, methods=('post',), url_path='(?P<document_id>[^/.]+)')
     def add_document(self, request, pk=None, document_id=None):
+        """Добавляет документ в коллекцию."""
         try:
             collection = self.get_object()
             document = Document.objects.get(id=document_id)
@@ -81,6 +108,7 @@ class CollectionsViewSet(ModelViewSet):
 
     @action(detail=True, methods=('delete',), url_path='(?P<document_id>[^/.]+)')
     def remove_document(self, request, pk=None, document_id=None):
+        """Удаляет документ из коллекции."""
         try:
             collection = self.get_object()
             document = Document.objects.get(id=document_id)
@@ -92,8 +120,26 @@ class CollectionsViewSet(ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    @action(detail=True, methods=('get',))
+    def statistics(self, request, pk=None):
+        """Возвращает статистику по коллекции."""
+        collection = self.get_object()
+        documents = collection.documents.all()
+        if not documents:
+            return Response(
+                {"error": "Collection is empty"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        texts = [doc.content for doc in documents]
+        stats = get_collection_statistics(texts)
+        sorted_stats = sorted(stats, key=lambda x: x['tf'])[:DISPLAYED_WORDS]
+        serializer = StatisticsSerializer({'statistics': sorted_stats})
+        return Response(serializer.data)
+
 
 class DocumentViewSet(ModelViewSet):
+    """Представление для документов."""
     queryset = Document.objects.all()
     parser_classes = (MultiPartParser, FormParser)
     permission_classes = (IsOwner,)
@@ -111,3 +157,32 @@ class DocumentViewSet(ModelViewSet):
 
     def get_queryset(self):
         return Document.objects.filter(owner=self.request.user)
+
+    @action(detail=True, methods=('get',))
+    def statistics(self, request, pk=None):
+        """Возвращает статистику по документу."""
+        document = self.get_object()
+        collections = document.collections.all()
+        if not collections:
+            return Response(
+                {"error": "Document is not in any collection"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        collections_stats = []
+        for collection in collections:
+            texts = [doc.content for doc in collection.documents.all()]
+            stats = get_document_statistics(document.content, texts)
+            sorted_stats = sorted(stats, key=lambda x: x['tf'])[:DISPLAYED_WORDS]
+
+            collections_stats.append({
+                'collection_id': collection.id,
+                'collection_name': collection.name or f"Collection {collection.id}",
+                'statistics': sorted_stats
+            })
+
+        serializer = CollectionStatisticsSerializer(
+            collections_stats,
+            many=True
+        )
+        return Response(serializer.data)
