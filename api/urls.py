@@ -5,13 +5,16 @@ from . import views
 app_name = 'api'
 
 router = DefaultRouter()
-router.register(r'collections', views.CollectionsViewSet)
+router.register(r'collections', views.CollectionViewSet)
 router.register(r'documents', views.DocumentViewSet)
 
 urlpatterns = [
     path('status/', views.check_status, name='status'),
     path('metrics/', views.metrics, name='metrics'),
     path('version/', views.version, name='version'),
+    path('collections/<int:pk>/statistics/', 
+         views.CollectionViewSet.as_view({'get': 'get_collection_statistics'}),
+         name='collection-statistics'),
     path('', include(router.urls)),
     path('auth/', include('djoser.urls')),
     path('auth/', include('djoser.urls.jwt')),

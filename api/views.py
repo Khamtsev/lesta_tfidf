@@ -50,9 +50,9 @@ def metrics(request):
             "latest_statistics_processed_timestamp": (
                 doc_metrics.latest_statistics_processed_timestamp
             ),
-            "min_time_processed": doc_metrics.min_time_processed,
-            "avg_time_processed": doc_metrics.avg_time_processed,
-            "max_time_processed": doc_metrics.max_time_processed,
+            "min_time_processed": round(doc_metrics.min_time_processed, 3),
+            "avg_time_processed": round(doc_metrics.avg_time_processed, 3),
+            "max_time_processed": round(doc_metrics.max_time_processed, 3),
             "total_documents": total_documents
         },
         "collection_metrics": {
@@ -60,10 +60,10 @@ def metrics(request):
             "latest_statistics_processed_timestamp": (
                 coll_metrics.latest_statistics_processed_timestamp
             ),
-            "min_time_processed": coll_metrics.min_time_processed,
-            "avg_time_processed": coll_metrics.avg_time_processed,
-            "max_time_processed": coll_metrics.max_time_processed,
-            "avg_documents_per_collection": avg_docs_per_collection
+            "min_time_processed": round(coll_metrics.min_time_processed, 3),
+            "avg_time_processed": round(coll_metrics.avg_time_processed, 3),
+            "max_time_processed": round(coll_metrics.max_time_processed, 3),
+            "avg_documents_per_collection": round(avg_docs_per_collection, 3)
         }
     })
 
@@ -75,7 +75,7 @@ def version(request):
     return Response({"version": VERSION})
 
 
-class CollectionsViewSet(ModelViewSet):
+class CollectionViewSet(ModelViewSet):
     """Представление для коллекций документов."""
     queryset = Collections.objects.all()
     permission_classes = (IsOwner,)
@@ -91,6 +91,22 @@ class CollectionsViewSet(ModelViewSet):
 
     def get_queryset(self):
         return Collections.objects.filter(owner=self.request.user)
+
+    def get_collection_statistics(self, request, pk=None):
+        """Возвращает статистику по коллекции."""
+        collection = self.get_object()
+        documents = collection.documents.all()
+        if not documents:
+            return Response(
+                {"error": "Collection is empty"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        texts = [doc.content for doc in documents]
+        stats = get_collection_statistics(texts)
+        sorted_stats = sorted(stats, key=lambda x: x['tf'])[:DISPLAYED_WORDS]
+        serializer = StatisticsSerializer({'statistics': sorted_stats})
+        return Response(serializer.data)
 
     @action(detail=True, methods=('post',), url_path='(?P<document_id>[^/.]+)')
     def add_document(self, request, pk=None, document_id=None):
@@ -120,23 +136,6 @@ class CollectionsViewSet(ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-    @action(detail=True, methods=('get',))
-    def statistics(self, request, pk=None):
-        """Возвращает статистику по коллекции."""
-        collection = self.get_object()
-        documents = collection.documents.all()
-        if not documents:
-            return Response(
-                {"error": "Collection is empty"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        texts = [doc.content for doc in documents]
-        stats = get_collection_statistics(texts)
-        sorted_stats = sorted(stats, key=lambda x: x['tf'])[:DISPLAYED_WORDS]
-        serializer = StatisticsSerializer({'statistics': sorted_stats})
-        return Response(serializer.data)
-
 
 class DocumentViewSet(ModelViewSet):
     """Представление для документов."""
@@ -158,7 +157,7 @@ class DocumentViewSet(ModelViewSet):
     def get_queryset(self):
         return Document.objects.filter(owner=self.request.user)
 
-    @action(detail=True, methods=('get',))
+    @action(detail=True)
     def statistics(self, request, pk=None):
         """Возвращает статистику по документу."""
         document = self.get_object()
