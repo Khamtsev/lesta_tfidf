@@ -16,6 +16,20 @@ class MetricsBase(models.Model):
     class Meta:
         abstract = True
 
+    def to_dict(self):
+        """Преобразует модель в словарь."""
+        return {
+            'statistics_requests': self.statistics_requests,
+            'latest_statistics_processed_timestamp': (
+                self.latest_statistics_processed_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                if self.latest_statistics_processed_timestamp
+                else None
+            ),
+            'min_time_processed': round(self.min_time_processed, 3),
+            'avg_time_processed': round(self.avg_time_processed, 3),
+            'max_time_processed': round(self.max_time_processed, 3),
+        }
+
 
 class DocumentMetrics(MetricsBase):
     """Метрики для документов."""

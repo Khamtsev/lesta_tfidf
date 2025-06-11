@@ -1,17 +1,23 @@
-from rest_framework.decorators import api_view, action, permission_classes
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny
+from drf_yasg.utils import swagger_auto_schema
+from django.conf import settings
 from core.models import (
     Collections,
     Document,
     DocumentMetrics,
     CollectionMetrics
 )
-from core.constants import VERSION, DISPLAYED_WORDS
-from core.services import get_document_statistics, get_collection_statistics
+from core.constants import VERSION
+from core.services import (
+    calculate_document_tfidf,
+    calculate_collection_tfidf,
+    huffman_encode
+)
 from .serializers import (
     CollectionsCreateSerializer,
     CollectionsSerializer,
@@ -22,6 +28,19 @@ from .serializers import (
     CollectionStatisticsSerializer
 )
 from users.permissions import IsOwner
+
+
+class OwnerViewSet(ModelViewSet):
+    """Базовый ViewSet для объектов, принадлежащих пользователю."""
+    permission_classes = (IsOwner,)
+
+    def get_queryset(self):
+        if not self.request.user.is_authenticated:
+            return self.queryset.none()
+        return self.queryset.filter(owner=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
 
 @api_view(['GET'])
@@ -44,27 +63,15 @@ def metrics(request):
         total_documents / total_collections if total_collections > 0 else 0
     )
 
+    doc_metrics_dict = doc_metrics.to_dict()
+    doc_metrics_dict['total_documents'] = total_documents
+
+    coll_metrics_dict = coll_metrics.to_dict()
+    coll_metrics_dict['avg_documents_per_collection'] = round(avg_docs_per_collection, 3)
+
     return Response({
-        "document_metrics": {
-            "statistics_requests": doc_metrics.statistics_requests,
-            "latest_statistics_processed_timestamp": (
-                doc_metrics.latest_statistics_processed_timestamp
-            ),
-            "min_time_processed": round(doc_metrics.min_time_processed, 3),
-            "avg_time_processed": round(doc_metrics.avg_time_processed, 3),
-            "max_time_processed": round(doc_metrics.max_time_processed, 3),
-            "total_documents": total_documents
-        },
-        "collection_metrics": {
-            "statistics_requests": coll_metrics.statistics_requests,
-            "latest_statistics_processed_timestamp": (
-                coll_metrics.latest_statistics_processed_timestamp
-            ),
-            "min_time_processed": round(coll_metrics.min_time_processed, 3),
-            "avg_time_processed": round(coll_metrics.avg_time_processed, 3),
-            "max_time_processed": round(coll_metrics.max_time_processed, 3),
-            "avg_documents_per_collection": round(avg_docs_per_collection, 3)
-        }
+        "document_metrics": doc_metrics_dict,
+        "collection_metrics": coll_metrics_dict
     })
 
 
@@ -75,10 +82,9 @@ def version(request):
     return Response({"version": VERSION})
 
 
-class CollectionViewSet(ModelViewSet):
+class CollectionViewSet(OwnerViewSet):
     """Представление для коллекций документов."""
     queryset = Collections.objects.all()
-    permission_classes = (IsOwner,)
     http_method_names = ('get', 'post', 'delete')
 
     def get_serializer_class(self):
@@ -86,12 +92,15 @@ class CollectionViewSet(ModelViewSet):
             return CollectionsCreateSerializer
         return CollectionsSerializer
 
-    def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
-
-    def get_queryset(self):
-        return Collections.objects.filter(owner=self.request.user)
-
+    @swagger_auto_schema(
+        operation_description="Возвращает статистику по коллекции",
+        responses={
+            200: "Статистика успешно получена",
+            400: "Коллекция пуста"
+        },
+        security=[{'Bearer': []}],
+        operation_id='collection_statistics'
+    )
     def get_collection_statistics(self, request, pk=None):
         """Возвращает статистику по коллекции."""
         collection = self.get_object()
@@ -103,13 +112,21 @@ class CollectionViewSet(ModelViewSet):
             )
 
         texts = [doc.content for doc in documents]
-        stats = get_collection_statistics(texts)
-        sorted_stats = sorted(stats, key=lambda x: x['tf'])[:DISPLAYED_WORDS]
+        stats = calculate_collection_tfidf(texts)
+        sorted_stats = sorted(stats, key=lambda x: x['tf'])[:settings.DISPLAYED_WORDS]
         serializer = StatisticsSerializer({'statistics': sorted_stats})
         return Response(serializer.data)
 
-    @action(detail=True, methods=('post',), url_path='(?P<document_id>[^/.]+)')
-    def add_document(self, request, pk=None, document_id=None):
+    @swagger_auto_schema(
+        operation_description="Добавляет документ в коллекцию",
+        responses={
+            200: "Документ успешно добавлен в коллекцию",
+            404: "Документ не найден"
+        },
+        security=[{'Bearer': []}],
+        operation_id='add_document'
+    )
+    def create_document(self, request, pk=None, document_id=None):
         """Добавляет документ в коллекцию."""
         try:
             collection = self.get_object()
@@ -122,8 +139,16 @@ class CollectionViewSet(ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-    @action(detail=True, methods=('delete',), url_path='(?P<document_id>[^/.]+)')
-    def remove_document(self, request, pk=None, document_id=None):
+    @swagger_auto_schema(
+        operation_description="Удаляет документ из коллекции",
+        responses={
+            204: "Документ успешно удален из коллекции",
+            404: "Документ не найден"
+        },
+        security=[{'Bearer': []}],
+        operation_id='remove_document'
+    )
+    def destroy_document(self, request, pk=None, document_id=None):
         """Удаляет документ из коллекции."""
         try:
             collection = self.get_object()
@@ -137,11 +162,10 @@ class CollectionViewSet(ModelViewSet):
             )
 
 
-class DocumentViewSet(ModelViewSet):
+class DocumentViewSet(OwnerViewSet):
     """Представление для документов."""
     queryset = Document.objects.all()
     parser_classes = (MultiPartParser, FormParser)
-    permission_classes = (IsOwner,)
     http_method_names = ('get', 'post', 'delete')
 
     def get_serializer_class(self):
@@ -151,14 +175,16 @@ class DocumentViewSet(ModelViewSet):
             return DocumentListSerializer
         return DocumentDetailSerializer
 
-    def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
-
-    def get_queryset(self):
-        return Document.objects.filter(owner=self.request.user)
-
-    @action(detail=True)
-    def statistics(self, request, pk=None):
+    @swagger_auto_schema(
+        operation_description="Возвращает статистику по документу",
+        responses={
+            200: "Статистика успешно получена",
+            400: "Документ не находится ни в одной коллекции"
+        },
+        security=[{'Bearer': []}],
+        operation_id='document_statistics'
+    )
+    def get_document_statistics(self, request, pk=None):
         """Возвращает статистику по документу."""
         document = self.get_object()
         collections = document.collections.all()
@@ -171,8 +197,8 @@ class DocumentViewSet(ModelViewSet):
         collections_stats = []
         for collection in collections:
             texts = [doc.content for doc in collection.documents.all()]
-            stats = get_document_statistics(document.content, texts)
-            sorted_stats = sorted(stats, key=lambda x: x['tf'])[:DISPLAYED_WORDS]
+            stats = calculate_document_tfidf(document.content, texts)
+            sorted_stats = sorted(stats, key=lambda x: x['tf'])[:settings.DISPLAYED_WORDS]
 
             collections_stats.append({
                 'collection_id': collection.id,
@@ -185,3 +211,22 @@ class DocumentViewSet(ModelViewSet):
             many=True
         )
         return Response(serializer.data)
+
+    @swagger_auto_schema(
+        operation_description="Возвращает содержимое документа, закодированное кодом Хаффмана",
+        responses={
+            200: "Документ успешно закодирован",
+            404: "Документ не найден"
+        },
+        security=[{'Bearer': []}],
+        operation_id='document_huffman'
+    )
+    def get_huffman(self, request, pk=None):
+        """Возвращает содержимое документа, закодированное кодом Хаффмана."""
+        document = self.get_object()
+        encoded_text, codes = huffman_encode(document.content)
+
+        return Response({
+            'encoded_text': encoded_text,
+            'codes': codes
+        })

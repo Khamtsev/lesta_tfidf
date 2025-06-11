@@ -133,9 +133,15 @@ Authorization: Bearer <your_access_token>
 ]
 ```
 
+### Документация
+
+- `/api/v1/swagger/` - Swagger документация
+- `/api/v1/redoc/` - Redoc документация
+
 ### API Endpoints
 
 Приложение предоставляет следующие API эндпоинты:
+
 
 #### Пользователи
 
@@ -155,6 +161,7 @@ Authorization: Bearer <your_access_token>
 - `POST /api/v1/documents/` - загрузка нового документа
 - `DELETE /api/v1/documents/<document_id>/` - удаление документа
 - `GET /api/v1/documents/<document_id>/statistics/` - получение статистики по документу (50 наиболее редких слов с их TF и IDF)
+- `GET /api/v1/documents/<document_id>/huffman/` - получение содержимого документа, закодированного Кодом Хаффмана
 
 #### Коллекции [требуется аутентификация, доступ только к своим коллекциям]
 - `GET /api/v1/collections/` - получение списка коллекций с id и списком документов
@@ -210,4 +217,7 @@ lesta_tfidf/
 - `POSTGRES_USER` - пользователь базы данных PostgreSQL
 - `POSTGRES_PASSWORD` - пароль базы данных PostgreSQL
 - `DB_HOST` - хост базы данных (в Docker Compose это имя сервиса)
-- `DB_PORT` - порт базы данных PostgreSQL (по умолчанию 5432)
+- `DB_PORT` - порт базы данных PostgreSQL
+- `NGINX_PORT` - порт доступа к API
+- `THROTTLE_ANON_RATE` - ограничение на количество запросов неавторизованных пользователей, по умолчанию 10/в минуту
+- `THROTTLE_USER_RATE` - ограничение на количество запросов авторизованным пользователей, по умолчанию 100/в минуту
