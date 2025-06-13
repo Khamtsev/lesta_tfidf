@@ -1,4 +1,6 @@
 /gateway
+/static
+/media
 TODO.md
 docker-compose.production.yml
 
