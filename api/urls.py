@@ -30,7 +30,7 @@ urlpatterns = [
     path('status/', views.check_status, name='status'),
     path('metrics/', views.metrics, name='metrics'),
     path('version/', views.version, name='version'),
-    path('collections/<int:pk>/statistics/', 
+    path('collections/<int:pk>/statistics/',
          views.CollectionViewSet.as_view({'get': 'get_collection_statistics'}),
          name='collection-statistics'),
     path('collections/<int:pk>/<int:document_id>/',

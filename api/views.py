@@ -10,7 +10,8 @@ from core.models import (
     Collections,
     Document,
     DocumentMetrics,
-    CollectionMetrics
+    CollectionMetrics,
+    CollectionDocument
 )
 from core.constants import VERSION
 from core.services import (
@@ -18,6 +19,7 @@ from core.services import (
     calculate_collection_tfidf,
     huffman_encode
 )
+from core.etags import get_collection_etag
 from .serializers import (
     CollectionsCreateSerializer,
     CollectionsSerializer,
@@ -67,7 +69,9 @@ def metrics(request):
     doc_metrics_dict['total_documents'] = total_documents
 
     coll_metrics_dict = coll_metrics.to_dict()
-    coll_metrics_dict['avg_documents_per_collection'] = round(avg_docs_per_collection, 3)
+    coll_metrics_dict['avg_documents_per_collection'] = round(
+        avg_docs_per_collection, 3
+    )
 
     return Response({
         "document_metrics": doc_metrics_dict,
@@ -104,6 +108,13 @@ class CollectionViewSet(OwnerViewSet):
     def get_collection_statistics(self, request, pk=None):
         """Возвращает статистику по коллекции."""
         collection = self.get_object()
+
+        etag = get_collection_etag(request, pk=pk)
+
+        if_none_match = request.META.get('HTTP_IF_NONE_MATCH')
+        if if_none_match and if_none_match == etag:
+            return Response(status=status.HTTP_304_NOT_MODIFIED)
+
         documents = collection.documents.all()
         if not documents:
             return Response(
@@ -113,9 +124,13 @@ class CollectionViewSet(OwnerViewSet):
 
         texts = [doc.content for doc in documents]
         stats = calculate_collection_tfidf(texts)
-        sorted_stats = sorted(stats, key=lambda x: x['tf'])[:settings.DISPLAYED_WORDS]
+        sorted_stats = sorted(stats, key=lambda x: x['tf'])[
+            :settings.DISPLAYED_WORDS
+        ]
         serializer = StatisticsSerializer({'statistics': sorted_stats})
-        return Response(serializer.data)
+        response = Response(serializer.data)
+        response['ETag'] = etag
+        return response
 
     @swagger_auto_schema(
         operation_description="Добавляет документ в коллекцию",

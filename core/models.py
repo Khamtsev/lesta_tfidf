@@ -41,6 +41,20 @@ class CollectionMetrics(MetricsBase):
     pass
 
 
+class Document(models.Model):
+    """Документы."""
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='documents'
+    )
+
+    def __str__(self):
+        return self.title
+
+
 class Collections(models.Model):
     """Коллекции документов."""
     name = models.CharField(max_length=255, null=True, blank=True)
@@ -50,21 +64,21 @@ class Collections(models.Model):
         on_delete=models.CASCADE,
         related_name='collections'
     )
+    documents = models.ManyToManyField(
+        Document,
+        through='CollectionDocument',
+        related_name='collections'
+    )
 
     def __str__(self):
         return self.name or f"Collection {self.id}"
 
 
-class Document(models.Model):
-    """Документы."""
-    title = models.CharField(max_length=255)
-    content = models.TextField()
-    collections = models.ManyToManyField(Collections, related_name='documents')
-    owner = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='documents'
-    )
+class CollectionDocument(models.Model):
+    """Связь между коллекцией и документом."""
+    collection = models.ForeignKey(Collections, on_delete=models.CASCADE)
+    document = models.ForeignKey(Document, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return self.title
+    class Meta:
+        unique_together = ('collection', 'document')
