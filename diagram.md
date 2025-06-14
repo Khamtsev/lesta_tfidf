@@ -1,6 +1,6 @@
----
-Django ER Diagram
----
+# Django ER Diagram
+
+```mermaid
 erDiagram
 LogEntry {
     AutoField id
